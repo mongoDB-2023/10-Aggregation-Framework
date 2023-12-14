@@ -1,6 +1,9 @@
 # 10-Aggregation-Framework
 1. [Intro](#schema1)
 2. [Using the Aggregation Framework](#schema2)
+3. [Working with $project](#schema3)
+4. [Turning the Location Intro a geoJson Object](#schema4)
+
 
 
 <hr>
@@ -129,3 +132,229 @@ db.persons.aggregate([
   { _id: { state: 'queensland' }, totalPersons: 20 },
 
 ```
+
+
+
+<hr>
+
+<a name="schema3"></a>
+
+## 3. Working with $project
+
+Ref: https://www.mongodb.com/docs/manual/reference/operator/aggregation/project/
+
+
+La etapa `$project` en el Aggregation Framework de MongoDB se utiliza para dar forma a los documentos de 
+salida de la operación de agregación. Esta etapa permite especificar los campos que deseas incluir o excluir en 
+los documentos de salida, así como realizar transformaciones en los valores de esos campos.
+
+
+
+La estructura básica de la etapa $project es la siguiente:
+
+```
+{ $project: { <campo>: <expresión>, ... } }
+```
+
+``` 
+db.persons.aggregate([{$project:{_id:0, gender:1, fullName:{$concat:["$name.first" ," ","$name.last"]}}}])
+[
+  { gender: 'male', fullName: 'carl jacobs' },
+  { gender: 'male', fullName: 'victor pedersen' },
+  { gender: 'male', fullName: 'harvey chambers' },
+  { gender: 'male', fullName: 'zachary lo' },
+  { gender: 'male', fullName: 'gideon van drongelen' },
+  { gender: 'female', fullName: 'پریا پارسا' },
+
+```
+- Capitalize el nombre y el apellido
+```
+db.persons.aggregate([
+    {
+      $project: {
+        _id: 0,
+        gender: 1,
+        fullName: {
+          $concat: [
+            { $toUpper: { $substrCP: ['$name.first', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.first',
+                1,
+                { $subtract: [{ $strLenCP: '$name.first' }, 1] }
+              ]
+            },
+            ' ',
+            { $toUpper: { $substrCP: ['$name.last', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.last',
+                1,
+                { $subtract: [{ $strLenCP: '$name.last' }, 1] }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]).pretty();
+
+  { gender: 'male', fullName: 'Carl Jacobs' },
+  { gender: 'male', fullName: 'Victor Pedersen' },
+  { gender: 'male', fullName: 'Harvey Chambers' },
+
+```
+
+<hr>
+
+<a name="schema4"></a>
+
+## 4. Turning the Location Intro a geoJson Object
+
+Se puede tener múltiples etapas `$project` en una operación de agregación en secuencia, 
+donde cada etapa `$project` se aplica después de la anterior.
+
+```
+db.collection.aggregate([
+  { $project: { field1: 1, field2: 1 } },
+  { $project: { newField: "$field1", field2: 0 } },
+  { $project: { finalField: "$newField" } }
+])
+```
+
+En este ejemplo:
+
+- La primera etapa $project incluye los campos field1 y field2.
+- La segunda etapa $project crea un nuevo campo newField que es igual al valor de field1 y excluye field2.
+- La tercera etapa $project crea un campo finalField que es igual al valor de newField.
+Cada etapa $project se aplica secuencialmente, y el resultado de cada una se convierte en la entrada para la 
+siguiente. Esto te permite realizar transformaciones más complejas en los documentos de la colección durante 
+la operación de agregación.
+
+
+
+```
+db.persons.aggregate([
+    {$project:{
+        _id:0, name:1,email:1,location:{type: 'Point', coordinates:[
+        "$location.coordinates.longitude",
+        "$location.coordinates.latitude"
+        ]}}},
+    {
+      $project: {
+        gender: 1,email:1, location:1,
+        fullName: {
+          $concat: [
+            { $toUpper: { $substrCP: ['$name.first', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.first',
+                1,
+                { $subtract: [{ $strLenCP: '$name.first' }, 1] }
+              ]
+            },
+            ' ',
+            { $toUpper: { $substrCP: ['$name.last', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.last',
+                1,
+                { $subtract: [{ $strLenCP: '$name.last' }, 1] }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]).pretty();
+```
+```
+  {
+    location: { type: 'Point', coordinates: [ '-90.4049', '-65.0877' ] },
+    email: 'delia.durand@example.com',
+    fullName: 'Delia Durand'
+  }
+
+```
+- $convert, convierte una entrada al tipo que le digamos.
+```
+db.persons.aggregate([
+    {$project:{
+        _id:0, name:1,email:1,location:{type: 'Point', coordinates:[
+        {$convert:{ input:"$location.coordinates.longitude",to: "double",onError: 0, onNull: 0.0}},
+        {$convert:{ input:"$location.coordinates.latitude",to: "double",onError: 0, onNull: 0.0}}
+        ]}}},
+    {
+      $project: {
+        gender: 1,email:1, location:1,
+        fullName: {
+          $concat: [
+            { $toUpper: { $substrCP: ['$name.first', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.first',
+                1,
+                { $subtract: [{ $strLenCP: '$name.first' }, 1] }
+              ]
+            },
+            ' ',
+            { $toUpper: { $substrCP: ['$name.last', 0, 1] } },
+            {
+              $substrCP: [
+                '$name.last',
+                1,
+                { $subtract: [{ $strLenCP: '$name.last' }, 1] }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]).pretty();
+```
+```
+ {
+    location: { type: 'Point', coordinates: [ -90.4049, -65.0877 ] },
+    email: 'delia.durand@example.com',
+    fullName: 'Delia Durand'
+  }
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
