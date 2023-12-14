@@ -3,6 +3,7 @@
 2. [Using the Aggregation Framework](#schema2)
 3. [Working with $project](#schema3)
 4. [Turning the Location Intro a geoJson Object](#schema4)
+5. [$group vs $project](#schema5)
 
 
 
@@ -320,12 +321,44 @@ db.persons.aggregate([
   }
 
 ```
+- $isoWeekYear
 
+Se utiliza en las expresiones de agregación dentro del Aggregation Framework. Este operador extrae el año 
+ISO (Año según el sistema de semanas ISO) de una fecha dada.
 
+```
+{ $group: { _id: { birthYear: { $isoWeekYear: "$birthdate" } }, numPersons: { $sum: 1 } } },
+```
+```
+  { _id: { birthYear: Long('1955') }, numPersons: 113 },
+  { _id: { birthYear: Long('1961') }, numPersons: 111 },
+```
 
+<hr>
 
+<a name="schema5"></a>
 
+## 5. $group vs $project
 
+![agg](./img/2agg.png)
+
+- $project:
+
+La etapa $project se utiliza para dar forma a los documentos de salida de la operación de agregación. Permite 
+especificar qué campos deseas incluir o excluir en los documentos de salida, así como realizar transformaciones en 
+los valores de esos campos.
+Puedes crear nuevos campos, modificar valores de campos existentes, renombrar campos y decidir qué campos incluir o 
+excluir en los resultados.
+
+- $group:
+
+La etapa $group se utiliza para agrupar documentos basándose en un campo específico y realizar operaciones de 
+agregación en esos grupos. Se utiliza comúnmente con funciones de agregación como $sum, $avg, $min, $max, entre otras.
+Puedes agrupar documentos y calcular valores agregados sobre esos grupos.
+
+ $project se centra en dar forma y transformar documentos, mientras que $group se centra en agrupar documentos y 
+ realizar operaciones de agregación en esos grupos. Pueden utilizarse en conjunto en una operación de agregación más 
+ amplia para lograr resultados específicos.
 
 
 
