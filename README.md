@@ -10,6 +10,10 @@
 9. [Using the `$filter` Operator](#schema9)
 10. [Apply Multiple Operations to out Array](#schema10)
 11. [Understanding $bucket](#schema11)
+12. [Diving Into Additional Stages](#schema12)
+13. [Writing Pipeline Into a New Collection](#schema13)
+14. [Working with the $geoNear Stage](#schema14)
+
 
 
 
@@ -691,3 +695,126 @@ La sintaxis básica de $bucketAuto es la siguiente:
 - buckets: Especifica el número deseado de "buckets". Puedes proporcionar un número o una cadena que describa la 
 estrategia de creación de "buckets" (por ejemplo, "5", "log10", "linear").
 - output: Especifica las operaciones de agregación que se realizarán dentro de cada "bucket".
+
+
+
+<hr>
+
+<a name="schema12"></a>
+
+## 12. Diving Into Additional Stages
+
+```
+db.persons.aggregate([
+    { $match: { gender: "male" } },
+    { $project: { _id: 0, gender: 1, name: { $concat: ["$name.first", " ", "$name.last"] }, birthdate: { $toDate: "$dob.date" } } },
+    { $sort: { birthdate: 1 } },
+    { $skip: 10 },
+    { $limit: 10 }
+  ]).pretty();
+```
+
+`$match: { gender: "male" }`:Filtra los documentos donde el campo "gender" es igual a "male", seleccionando solo 
+personas de género masculino.
+
+`$project: { _id: 0, gender: 1, name: { $concat: ["$name.first", " ", "$name.last"] }, 
+birthdate: { $toDate: "$dob.date" } }`:Proyecta los campos deseados en el resultado final. 
+Excluye el campo "_id" (estableciendo _id: 0).
+Incluye el campo "gender".
+Concatena los campos "name.first" y "name.last" para formar un nuevo campo "name" que representa el nombre 
+completo de la persona.
+Convierte el campo "dob.date" a un formato de fecha utilizando $toDate y lo asigna al nuevo campo "birthdate".
+
+`$sort: { birthdate: 1 }`:Ordena los documentos en función del campo "birthdate" en orden ascendente (1), es decir, 
+desde la fecha más temprana hasta la más reciente.
+
+`$skip: 10`: Omite los primeros 10 documentos después de la clasificación. En este caso, se están omitiendo las 10 
+personas más jóvenes.
+
+`$limit: 10`:Limita el número de documentos resultantes a 10. Esto significa que se seleccionarán y mostrarán las 
+10 personas más jóvenes (después de omitir las primeras 10).
+
+https://www.mongodb.com/docs/manual/core/aggregation-pipeline-optimization/
+
+<hr>
+
+<a name="schema13"></a>
+
+## 13. Writing Pipeline Into a New Collection
+
+
+La etapa `$out` en una operación de agregación en MongoDB se utiliza para escribir los resultados de la 
+operación de agregación en una nueva colección o sobrescribir una colección existente. 
+
+```
+ { $out: "transformedPersons" }
+```
+
+commands-14.js
+
+```
+analytics> show collections
+friends
+persons
+transformedPersons
+
+```
+
+<hr>
+
+<a name="schema14"></a>
+
+## 14. Working with the $geoNear Stage
+
+```
+db.transformedPersons.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: 'Point',
+          coordinates: [-18.4, -42.8]
+        },
+        maxDistance: 1000000,
+        num: 10,
+        query: { age: { $gt: 30 } },
+        distanceField: "distance"
+      }
+    }
+  ]).pretty();
+```
+
+`$geoNear:` Este es el operador principal que realiza la búsqueda geoespacial.
+
+`near: { type: 'Point', coordinates: [-18.4, -42.8] }:`Define el punto de referencia para la búsqueda. En este caso, 
+se utiliza un punto geográfico con coordenadas -18.4 de latitud y -42.8 de longitud.
+
+`maxDistance: 1000000:`Especifica la distancia máxima, en metros, desde el punto de referencia (near) hasta la cual 
+se buscarán documentos. En este caso, se establece en 1000000 metros (o 1000 kilómetros).
+
+`num: 10:`Limita el número de documentos que se devolverán a 10. Solo se mostrarán los 10 documentos más cercanos 
+al punto de referencia.
+
+`query: { age: { $gt: 30 } }:`Agrega una condición adicional para filtrar los documentos que se tienen en cuenta en 
+la búsqueda. Solo se considerarán los documentos donde el campo "age" sea mayor que 30.
+
+`distanceField: "distance":`Especifica el nombre del nuevo campo que contendrá la distancia entre el punto de 
+referencia y cada documento. En este caso, el campo se llama "distance".
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
