@@ -4,6 +4,10 @@
 3. [Working with $project](#schema3)
 4. [Turning the Location Intro a geoJson Object](#schema4)
 5. [$group vs $project](#schema5)
+6. [Pushing Elements Into Newly Created Arrays](#schema6)
+7. [`$unwind` & Eliminating Duplicate Values](#schema7)
+8. [Using Projection with Arrays & Length of an Array](#schema8)
+9. [Using the `$filter` Operator](#schema9)
 
 
 
@@ -362,20 +366,183 @@ Puedes agrupar documentos y calcular valores agregados sobre esos grupos.
 
 
 
+<hr>
+
+<a name="schema6"></a>
+
+## 6. Pushing Elements Into Newly Created Arrays
+
+- Importamos los datos array-data.json y creamos una colección nueva. Vamos a trabajar con arrays.
 
 
+```
+mongoimport persons.json -d analytics -c friends --jsonArray
+```
+`commands-9.js`
+
+Cuando trabajas con datos que contienen arrays en la Aggregation Framework de MongoDB, hay algunas consideraciones 
+y operadores específicos que puedes utilizar para manipular y procesar esos arrays. Algunas diferencias clave incluyen:
+
+**Operadores para Arrays:**
+
+MongoDB proporciona operadores específicos para trabajar con arrays, como `$unwind, $push, $addToSet, $slice`, 
+entre otros.
+- `$unwind:` Descompone un array en varios documentos independientes, creando una copia del documento para 
+cada elemento del array.
+- `$push:` Agrega valores a un array existente en un documento.
+- `$addToSet:` Agrega valores a un array solo si no existen ya en el array.
+- `$slice:` Devuelve un número específico de elementos de un array.
+Estos operadores te permiten realizar operaciones específicas en los arrays durante la agregación.
+Agregación en Arrays:
+
+Puedes realizar agregaciones directamente en los elementos de un array. Por ejemplo, puedes sumar los valores de 
+un array usando $sum en la etapa $group.
 
 
+**Indexación de Arrays:**
+
+MongoDB admite indexación de arrays, lo que significa que puedes crear índices en campos que contienen arrays 
+para mejorar el rendimiento de las consultas que implican esos arrays.
+
+**Filtrado de Arrays:**
+
+Puedes usar operadores como $elemMatch para filtrar documentos basados en condiciones dentro de arrays.
+
+- `$push`
+Vamos a hacer una agregación, con un group por la edad y añadimos un nuevo elemento `allHobbies` que hemos creado con
+el operador `$push`.
+
+```
+analytics> db.friends.aggregate([ { $group: { _id: { age: "$age" }, allHobbies: { $push: "$hobbies" } } }] )
+[ 
+  {
+    _id: { age: 29 },
+    allHobbies: [ [ 'Sports', 'Cooking' ], [ 'Cooking', 'Skiing' ] ]
+  },
+  { _id: { age: 30 }, allHobbies: [ [ 'Eating', 'Data Analytics' ] ] }
+]
+
+```
 
 
+<hr>
+
+<a name="schema7"></a>
+
+## 7 `$unwind` & Eliminating Duplicate Values
+
+- `$unwind`, descompone el array y crea un elemento nuevo por cada elemento del array.
+
+```
+analytics> db.friends.find({name: 'Manu'})
+[
+  {
+    _id: ObjectId('657c06be59d82ec7a969abb8'),
+    name: 'Manu',
+    hobbies: [ 'Eating', 'Data Analytics' ],
+    age: 30,
+    examScores: [
+      { difficulty: 7, score: 52.1 },
+      { difficulty: 2, score: 74.3 },
+      { difficulty: 5, score: 53.1 }
+    ]
+  }
+]
+
+```
+ Usando `$undwind`
+```
+analytics> db.friends.aggregate([ { $unwind: "$hobbies" }] ).pretty();
+[
+  {
+    _id: ObjectId('657c06be59d82ec7a969abb8'),
+    name: 'Manu',
+    hobbies: 'Eating',
+    age: 30,
+    examScores: [
+      { difficulty: 7, score: 52.1 },
+      { difficulty: 2, score: 74.3 },
+      { difficulty: 5, score: 53.1 }
+    ]
+  },
+  {
+    _id: ObjectId('657c06be59d82ec7a969abb8'),
+    name: 'Manu',
+    hobbies: 'Data Analytics',
+    age: 30,
+    examScores: [
+      { difficulty: 7, score: 52.1 },
+      { difficulty: 2, score: 74.3 },
+      { difficulty: 5, score: 53.1 }
+    ]
+  },
+
+```
+```
+db.friends.aggregate([
+    { $unwind: "$hobbies" }, 
+    { $group: { _id: { age: "$age" }, allHobbies: { $push: "$hobbies" } } }
+  ]).pretty();
+```
+```
+[
+  {
+    _id: { age: 29 },
+    allHobbies: [ 'Sports', 'Cooking', 'Cooking', 'Skiing' ]
+  },
+  { _id: { age: 30 }, allHobbies: [ 'Eating', 'Data Analytics' ] }
+]
+
+```
+Como se puede observar al hacer la descomposición y luego  la agrupación por edad y crear el elemento allHobbies, 
+tenemos hobbies duplicados, Cooking.
 
 
+- `$addToSet`
 
+```
+db.friends.aggregate([
+    { $unwind: "$hobbies" }, 
+    { $group: { _id: { age: "$age" }, allHobbies: { $addToSet: "$hobbies" } } }
+  ]).pretty();
 
+```
 
+<hr>
 
+<a name="schema8"></a>
 
+## 8. Using Projection with Arrays & Length of an Array
 
+`$slice:` Devuelve un número específico de elementos de un array.
+
+```
+analytics> db.friends.aggregate([
+...     { $project: { _id: 0, examScore: { $slice: ["$examScores", 2, 1] } } }
+...   ]).pretty();
+[
+  { examScore: [ { difficulty: 5, score: 53.1 } ] },
+  { examScore: [ { difficulty: 3, score: 88.5 } ] },
+  { examScore: [ { difficulty: 6, score: 61.5 } ] }
+]
+
+```
+`$size:` se utiliza para obtener el tamaño de un array. Este operador devuelve el número de elementos en un 
+array específico dentro de un documento.
+
+```
+analytics> db.friends.aggregate([
+...     { $project: { _id: 0, numScore: { $size: "$examScores" } } }
+...   ]).pretty();
+[ { numScore: 3 }, { numScore: 3 }, { numScore: 3 } ]
+analytics> 
+
+```
+<hr>
+
+<a name="schema9"></a>
+
+## 9. Using the `$filter` Operator
 
 
 
