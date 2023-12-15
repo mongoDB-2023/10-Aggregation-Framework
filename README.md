@@ -8,6 +8,9 @@
 7. [`$unwind` & Eliminating Duplicate Values](#schema7)
 8. [Using Projection with Arrays & Length of an Array](#schema8)
 9. [Using the `$filter` Operator](#schema9)
+10. [Apply Multiple Operations to out Array](#schema10)
+11. [Understanding $bucket](#schema11)
+
 
 
 
@@ -545,16 +548,146 @@ analytics>
 ## 9. Using the `$filter` Operator
 
 
+El operador `$filter` en la Aggregation Framework de MongoDB se utiliza para filtrar los elementos de un array 
+según un criterio especificado. Esto te permite reducir los elementos de un array a aquellos que cumplen con 
+ciertas condiciones.
+
+La sintaxis básica del operador $filter en una etapa de agregación es la siguiente:
+
+```
+{ $project: { newArray: { $filter: { input: "$yourArrayField", as: "item", cond: { $yourCondition } } } } }
+```
+- input: Especifica el array que deseas filtrar.
+- as: Especifica el nombre de la variable que representa cada elemento del array durante el proceso de filtrado.
+- cond: Especifica la condición que debe cumplir cada elemento del array para ser incluido en el resultado.
+
+```
+analytics> db.friends.aggregate([
+...     {
+...       $project: {
+...         _id: 0,
+...         scores: { $filter: { input: '$examScores', as: 'sc', cond: { $gt: ["$$sc.score", 60] } } }
+...       }
+...     }
+...   ]).pretty();
+[
+  { scores: [ { difficulty: 2, score: 74.3 } ] },
+  {
+    scores: [ { difficulty: 6, score: 62.1 }, { difficulty: 3, score: 88.5 } ]
+  },
+  {
+    scores: [ { difficulty: 3, score: 75.1 }, { difficulty: 6, score: 61.5 } ]
+  }
+]
+```
+
+La doble expresión $ se utiliza para referenciar variables de un contexto específico.
+
+cond: { $gt: ["$$sc.score", 60] } es la condición que se aplica a cada elemento del array. Aquí es donde se 
+utiliza la doble expresión $.
+
+- `$$sc` se refiere a la variable que representa cada elemento del array (examScores).
+- `$$sc.score` se refiere al campo score dentro de cada elemento del array. 
+- Entonces, $gt: ["$$sc.score", 60] significa que estás filtrando los elementos del array donde el valor del 
+campo score es mayor que 60.
 
 
+<hr>
+
+<a name="schema10"></a>
+
+## 10. Apply Multiple Operations to out Array
 
 
+```
+analytics> db.friends.aggregate([{$unwind: '$examScores'},{$project:{_id:0,name:1,age:1,score:"$examScores.score"}},
+{$sort:{score:-1}}])
+[
+  { name: 'Max', age: 29, score: 88.5 },
+  { name: 'Maria', age: 29, score: 75.1 },
+  { name: 'Manu', age: 30, score: 74.3 },
+  { name: 'Max', age: 29, score: 62.1 },
+  { name: 'Maria', age: 29, score: 61.5 },
+  { name: 'Max', age: 29, score: 57.9 },
+  { name: 'Manu', age: 30, score: 53.1 },
+  { name: 'Manu', age: 30, score: 52.1 },
+  { name: 'Maria', age: 29, score: 44.2 }
+]
+```
+
+Desgloso lo que hace cada etapa:
+
+`$unwind: '$examScores':` Esta etapa descompone el array examScores en múltiples documentos independientes. 
+Crea una copia del documento original por cada elemento del array, de modo que puedas operar individualmente en 
+cada puntuación de examen.
+
+`$project: {_id: 0, name: 1, age: 1, score: "$examScores.score"}:` Esta etapa proyecta solo los campos deseados en 
+el resultado final. Se eliminan los identificadores (_id: 0) y se incluyen los campos name, age y score. La puntuación 
+del examen se extrae del array examScores y se coloca en un campo llamado score.
+
+`$sort: {score: -1}:` Esta etapa ordena los documentos resultantes en función del campo score en orden descendente (-1).
+Esto significa que los documentos se ordenarán de mayor a menor según la puntuación del examen.
+En resumen, esta operación de agregación descompone un array de puntuaciones de examen en documentos individuales, 
+proyecta solo los campos relevantes (nombre, edad y puntuación del examen) y luego ordena los resultados según la 
+puntuación del examen en orden descendente.
 
 
+<hr>
+
+<a name="schema11"></a>
+
+## 11. Understanding $bucket
 
 
+La etapa `$bucket` en la Aggregation Framework de MongoDB se utiliza para agrupar documentos en "buckets" (agrupaciones) 
+en función de un rango o de expresiones específicas. Es una forma de categorizar documentos según ciertos criterios y 
+realizar operaciones de agregación dentro de cada categoría. 
 
+```
+{
+  $bucket: {
+    groupBy: <expression>,
+    boundaries: [<value1>, <value2>, ...],
+    default: <literal>,
+    output: {
+      <outputField1>: { $accumulatorOperator1: <expression1> },
+      <outputField2>: { $accumulatorOperator2: <expression2> },
+      // ...
+    }
+  }
+}
 
+```
 
+- `groupBy:` Especifica la expresión por la cual se agruparán los documentos.
+- `boundaries:` Especifica los límites de los "buckets" (categorías). Los documentos se asignan a un "bucket" 
+en función de si su valor se encuentra entre dos límites.
+- `default:` Especifica el valor por defecto para los documentos que no entran en ningún "bucket".
+- `output:` Especifica las operaciones de agregación que se realizarán dentro de cada "bucket".
 
+- `$bucketAuto`
 
+Se utiliza para agrupar documentos en "buckets" (agrupaciones) de manera automática, es decir, sin tener 
+que especificar manualmente los límites de los "buckets". Este operador automáticamente determina los límites de los 
+"buckets" basándose en la distribución de los valores en el campo especificado.
+
+La sintaxis básica de $bucketAuto es la siguiente:
+
+```
+{
+  $bucketAuto: {
+    groupBy: <expression>,
+    buckets: <numBuckets>,
+    output: {
+      <outputField1>: { $accumulatorOperator1: <expression1> },
+      <outputField2>: { $accumulatorOperator2: <expression2> },
+      // ...
+    }
+  }
+}
+```
+
+- groupBy: Especifica la expresión por la cual se agruparán los documentos.
+- buckets: Especifica el número deseado de "buckets". Puedes proporcionar un número o una cadena que describa la 
+estrategia de creación de "buckets" (por ejemplo, "5", "log10", "linear").
+- output: Especifica las operaciones de agregación que se realizarán dentro de cada "bucket".
